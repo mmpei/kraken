@@ -27,10 +27,14 @@ import (
 	"github.com/uber/kraken/utils/log"
 
 	"github.com/spf13/cobra"
+	"fmt"
+	"net/http"
+	"github.com/uber/kraken/proxy/server"
 )
 
 var (
 	ports         []int
+	serverPort    int
 	configFile    string
 	krakenCluster string
 	secretsFile   string
@@ -46,6 +50,8 @@ var (
 func init() {
 	rootCmd.PersistentFlags().IntSliceVar(
 		&ports, "port", []int{}, "port to listen on (may specify multiple)")
+	rootCmd.PersistentFlags().IntVarP(
+		&serverPort, "server-port", "", 0, "http server port to listen on")
 	rootCmd.PersistentFlags().StringVarP(
 		&configFile, "config", "", "", "configuration file path")
 	rootCmd.PersistentFlags().StringVarP(
@@ -61,6 +67,10 @@ func Execute() {
 func run() {
 	if len(ports) == 0 {
 		panic("must specify a port")
+	}
+
+	if serverPort == 0 {
+		panic("must specify non-zero http server port")
 	}
 
 	var config Config
@@ -113,6 +123,13 @@ func run() {
 	tagClient := tagclient.NewClusterClient(buildIndexes, tls)
 
 	transferer := transfer.NewReadWriteTransferer(stats, tagClient, originCluster, cas)
+
+	server := server.New(stats, originCluster)
+	addr := fmt.Sprintf(":%d", serverPort)
+	log.Infof("Starting http server on %s", addr)
+	go func() {
+		log.Fatal(http.ListenAndServe(addr, server.Handler()))
+	}()
 
 	registry, err := config.Registry.Build(config.Registry.ReadWriteParameters(transferer, cas, stats))
 	if err != nil {
