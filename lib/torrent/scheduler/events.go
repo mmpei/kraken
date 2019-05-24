@@ -237,6 +237,7 @@ func (e announceTickEvent) apply(s *state) {
 	}
 	if ctrl.dispatcher.NumPeers() >= s.conns.MaxConnsPerTorrent() {
 		s.log("hash", h).Info("Skipping announce for fully saturated torrent")
+		s.announceQueue.Ready(h)
 		return
 	}
 	go s.sched.announce(ctrl.dispatcher.Digest(), ctrl.dispatcher.InfoHash(), ctrl.dispatcher.Complete())
